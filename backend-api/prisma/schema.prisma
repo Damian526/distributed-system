@@ -1,0 +1,56 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum TaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentStatus {
+  PAID
+  REFUNDED
+  FAILED
+}
+
+model ReportTask {
+  id           String     @id @default(uuid())
+  year         Int
+  scopeRegion  String
+  status       TaskStatus @default(PENDING)
+  progress     Int        @default(0)
+  filePath     String?
+  errorMessage String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("report_tasks")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  country   String
+  createdAt DateTime @default(now())
+  orders    Order[]
+
+  @@map("customers")
+}
+
+model Order {
+  id         String        @id @default(uuid())
+  customerId String        @map("customer_id")
+  amount     Decimal       @db.Decimal(10, 2)
+  currency   String        @default("PLN")
+  status     PaymentStatus @default(PAID)
+  createdAt  DateTime      @default(now())
+  customer   Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("orders")
+}

@@ -1,15 +1,13 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
     container_name: saas_postgres_db
     environment:
-      POSTGRES_USER: dev_user
-      POSTGRES_PASSWORD: dev_password
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 7PmWaW010vYKAl
       POSTGRES_DB: saas_analytics
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
