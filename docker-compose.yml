@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: saas_postgres_db
+    environment:
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: saas_analytics
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - distributed_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: saas_redis_queue
+    ports:
+      - "6379:6379"
+    networks:
+      - distributed_network
+
+volumes:
+  pgdata:
+
+networks:
+  distributed_network:
+    driver: bridge
