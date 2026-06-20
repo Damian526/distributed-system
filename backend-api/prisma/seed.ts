@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { Pool } from '@/node_modules/@types/pg';
+import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { faker } from '@faker-js/faker';
 import 'dotenv/config';
@@ -16,7 +16,7 @@ async function main() {
   console.log('Seeding database with mock enterprise records...');
 
   const countries = ['PL', 'DE', 'FR', 'GB', 'US'];
-  const customers = [];
+  const customers: Awaited<ReturnType<typeof prisma.customer.create>>[] = [];
 
   // Create 100 Mock Customers
   for (let i = 0; i < 100; i++) {
@@ -31,7 +31,8 @@ async function main() {
 
   // Create 5000 Mock Orders distributed over the past year
   for (let i = 0; i < 5000; i++) {
-    const randomCustomer = customers[Math.floor(Math.random() * customers.length)];
+    const randomCustomer =
+      customers[Math.floor(Math.random() * customers.length)];
     await prisma.order.create({
       data: {
         customerId: randomCustomer.id,
