@@ -17,20 +17,16 @@ export class PrismaService
 
   constructor() {
     const connectionString = process.env.DATABASE_URL;
-
-    if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable is missing.');
-    }
+    if (!connectionString) throw new Error('DATABASE_URL is missing.');
 
     const pool = new Pool({ connectionString });
     const adapter = new PrismaPg(pool);
-
     super({ adapter });
   }
 
   async onModuleInit() {
     await this.$connect();
-    this.logger.log('💤 Database connection closed.');
+    this.logger.log('✅ Worker connected to PostgreSQL');
   }
 
   async onModuleDestroy() {
