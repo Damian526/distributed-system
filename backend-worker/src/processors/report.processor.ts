@@ -39,7 +39,9 @@ export class ReportProcessor extends WorkerHost {
       // 3. Generate Dummy "PDF" File (For now, it's a text file)
       this.logger.log('Compiling file structure...');
       const fileName = `report_${year}_${scopeRegion}_${Date.now()}.txt`;
-      const filePath = path.join(process.cwd(), fileName);
+      const reportsDir = path.join(process.cwd(), 'reports');
+      await fs.mkdir(reportsDir, { recursive: true });
+      const filePath = path.join(reportsDir, fileName);
 
       await fs.writeFile(
         filePath,
