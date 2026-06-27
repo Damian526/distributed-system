@@ -2,6 +2,8 @@
 import { ref, onUnmounted } from 'vue';
 import axios from 'axios';
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 // 1. STRICT TYPESCRIPT: We define exactly what the backend gives us
 interface ReportTask {
   id: string;
@@ -23,7 +25,7 @@ const generateReport = async () => {
 
   try {
     // We send the request to your NestJS API (The Receptionist)
-    const response = await axios.post<ReportTask>('http://localhost:3000/api/reports', {
+    const response = await axios.post<ReportTask>(`${API_URL}/api/reports`, {
       year: 2025,
       scopeRegion: 'PL'
     });
@@ -45,7 +47,7 @@ const startPolling = (taskId: string) => {
   // Call the API every 2 seconds (2000 milliseconds)
   pollingInterval.value = window.setInterval(async () => {
     try {
-      const response = await axios.get<ReportTask>(`http://localhost:3000/api/reports/${taskId}`);
+      const response = await axios.get<ReportTask>(`${API_URL}/api/reports/${taskId}`);
       currentTask.value = response.data;
 
       // If the worker finishes or fails, STOP calling the API!

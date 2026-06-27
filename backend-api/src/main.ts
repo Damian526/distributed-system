@@ -17,8 +17,13 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors();
-  await app.listen(3000);
-  logger.log('🚀 API is running on http://localhost:3000');
+  app.enableCors({
+    origin: process.env.FRONTEND_URL,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    allowedHeaders: ['Content-Type, Accept'],
+  });
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port);
+  logger.log(`🚀 API is running on ${process.env.BACKEND_API_URL}`);
 }
 bootstrap();
