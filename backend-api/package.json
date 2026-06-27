@@ -23,6 +23,9 @@
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
   },
   "dependencies": {
+    "@bull-board/api": "^8.0.1",
+    "@bull-board/express": "^8.0.1",
+    "@bull-board/nestjs": "^8.0.1",
     "@faker-js/faker": "^10.5.0",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.1.27",
