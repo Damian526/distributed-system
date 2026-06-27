@@ -12,7 +12,12 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks:
       - distributed_network
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d saas_analytics"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   redis:
     image: redis:7-alpine
     container_name: saas_redis_queue
@@ -20,6 +25,12 @@ services:
       - "6379:6379"
     networks:
       - distributed_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   pgdata:
