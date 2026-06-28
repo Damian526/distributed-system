@@ -18,9 +18,12 @@ interface ReportTask {
 const currentTask = ref<ReportTask | null>(null);
 const isLoading = ref<boolean>(false);
 const pollingInterval = ref<number | null>(null);
+const errorMessage = ref<string | null>(null);
+
 
 // 3. THE TRIGGER: Clicking the "Generate Report" button
 const generateReport = async () => {
+  errorMessage.value = null;
   isLoading.value = true;
 
   try {
@@ -39,6 +42,7 @@ const generateReport = async () => {
   } catch (error) {
     console.error("Failed to start report", error);
     isLoading.value = false;
+    errorMessage.value = 'Failed to start report generation. Is the API running?';
   }
 };
 
@@ -96,6 +100,9 @@ onUnmounted(() => {
           :disabled="isLoading"
           style="margin-top: 1rem; margin-bottom: 2rem;"
         />
+        <Message v-if="errorMessage" severity="error" style="margin-top: 1rem;">
+  {{ errorMessage }}
+</Message>
 
         <div v-if="currentTask">
           <hr style="margin-bottom: 1.5rem; opacity: 0.2;" />

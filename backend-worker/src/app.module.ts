@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
-import { ProcessorsModule } from './processors/processors.module';
 import { PaymentProcessor } from './processors/payment.processor';
 import { ReportProcessor } from './processors/report.processor';
 
