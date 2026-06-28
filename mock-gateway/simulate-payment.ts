@@ -1,50 +1,50 @@
 import { faker } from "@faker-js/faker";
+import axios from "axios";
 
-// 1. Define the exact structure your API expects.
-// This matches the WebhookPayloadDto we created in the API.
 interface MockPaymentPayload {
   transactionId: string;
   amount: number;
   currency: string;
 }
 
-async function triggerWebhook() {
-  // 2. Generate random, realistic payment data using Faker.
+const SUPPORTED_CURRENCIES = ["PLN", "EUR", "USD", "GBP"] as const;
+
+async function triggerWebhook(index: number): Promise<void> {
   const payload: MockPaymentPayload = {
     transactionId: `txn_${faker.string.alphanumeric(16)}`,
     amount: faker.number.float({ min: 10, max: 5000, fractionDigits: 2 }),
-    currency: "PLN",
+    currency: faker.helpers.arrayElement(SUPPORTED_CURRENCIES),
   };
 
-  console.log("⏳ Sending mock webhook to API...", payload);
+  console.log(`⏳ [${index}] Sending...`, payload);
 
   try {
-    // 3. Send a POST request to your local API using the native Node fetch API.
-    const response = await fetch("http://localhost:3000/api/webhooks", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    // 4. Check if the API accepted the payload.
-    if (response.ok) {
-      const result = await response.json();
-      console.log("✅ Success! API Response:", result);
-    } else {
-      console.error(`❌ Failed! API returned status: ${response.status}`);
-      const errorText = await response.text();
-      console.error("Error details:", errorText);
-    }
-  } catch (error) {
-    // 5. Catch network errors (e.g., if you forgot to start the API server).
-    console.error(
-      "❌ Network Error: Could not reach the API. Is it running?",
-      error,
+    const response = await axios.post(
+      "http://localhost:3000/api/webhooks",
+      payload,
     );
+    console.log(`✅ [${index}] Accepted:`, response.data);
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error(
+        `❌ [${index}] Failed — status: ${error.response?.status}`,
+        error.response?.data,
+      );
+    } else {
+      console.error(`❌ [${index}] Network error:`, error);
+    }
   }
 }
 
-// 6. Execute the function.
-triggerWebhook();
+async function runSimulation(count: number, delayMs: number): Promise<void> {
+  console.log(`🚀 Firing ${count} payments, ${delayMs}ms apart\n`);
+
+  for (let i = 1; i <= count; i++) {
+    await triggerWebhook(i);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  console.log("\n🏁 Done.");
+}
+
+runSimulation(5, 500);

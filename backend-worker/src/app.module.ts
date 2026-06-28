@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProcessorsModule } from './processors/processors.module';
+import { PaymentProcessor } from './processors/payment.processor';
+import { ReportProcessor } from './processors/report.processor';
 
 @Module({
   imports: [
@@ -12,8 +14,12 @@ import { ProcessorsModule } from './processors/processors.module';
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
       },
     }),
+    BullModule.registerQueue(
+      { name: 'report-queue' },
+      { name: 'webhook-queue' },
+    ),
     PrismaModule,
-    ProcessorsModule, // We will create this next
   ],
+  providers: [ReportProcessor, PaymentProcessor], // We will create this next
 })
 export class AppModule {}

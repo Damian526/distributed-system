@@ -44,13 +44,14 @@ model Customer {
 }
 
 model Order {
-  id         String        @id @default(uuid())
-  customerId String        @map("customer_id")
-  amount     Decimal       @db.Decimal(10, 2)
-  currency   String        @default("PLN")
-  status     PaymentStatus @default(PAID)
-  createdAt  DateTime      @default(now())
-  customer   Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  id            String        @id @default(uuid())
+  transactionId String        @unique @map("transaction_id")
+  customerId    String?       @map("customer_id")
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("PLN")
+  status        PaymentStatus @default(PAID)
+  createdAt     DateTime      @default(now())
+  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@map("orders")
 }
