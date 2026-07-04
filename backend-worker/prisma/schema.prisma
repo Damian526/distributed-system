@@ -25,7 +25,7 @@ model ReportTask {
   scopeRegion  String
   status       TaskStatus @default(PENDING)
   progress     Int        @default(0)
-  filePath     String?
+  fileKey     String?
   errorMessage String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

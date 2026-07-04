@@ -15,6 +15,9 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { ReportTask } from '@prisma/client';
 import * as fs from 'fs';
 import type { Response } from 'express';
+import { REPORTS_BUCKET, s3Client } from '../storage/s3.client';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 @Controller('api/reports')
 export class ReportsController {
@@ -38,12 +41,14 @@ export class ReportsController {
   ): Promise<void> {
     const task = await this.reportsService.getReportStatus(id);
 
-    if (task.status !== 'COMPLETED' || !task.filePath) {
+    if (task.status !== 'COMPLETED' || !task.fileKey) {
       throw new NotFoundException('Report not ready for download');
     }
-    if (!fs.existsSync(task.filePath)) {
-      throw new NotFoundException('Report file not found');
-    }
-    res.download(task.filePath);
+    const url = await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({ Bucket: REPORTS_BUCKET, Key: task.fileKey }),
+      { expiresIn: 300 },
+    );
+    res.redirect(302, url);
   }
 }

@@ -1,17 +1,34 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser } from 'puppeteer';
 import { buildReportHtml } from './report-template';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { s3Client, REPORTS_BUCKET } from '../storage/s3.client';
+import * as os from 'os';
 @Processor('report-queue')
-export class ReportProcessor extends WorkerHost {
+export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
   private readonly logger = new Logger(ReportProcessor.name);
+  private browser: Browser | null = null;
 
   constructor(private readonly prisma: PrismaService) {
     super();
+  }
+
+  private async getBrowser(): Promise<Browser> {
+    if (!this.browser) {
+      this.browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+    }
+    return this.browser;
+  }
+  async onModuleDestroy() {
+    await this.browser?.close();
   }
 
   async process(job: Job<any, any, string>): Promise<void> {
@@ -75,14 +92,9 @@ export class ReportProcessor extends WorkerHost {
       });
 
       const fileName = `report_${year}_${scopeRegion}_${Date.now()}.pdf`;
-      const reportsDir = path.join(process.cwd(), 'reports');
-      await fs.mkdir(reportsDir, { recursive: true });
-      const filePath = path.join(reportsDir, fileName);
+      const tmpPath = path.join(os.tmpdir(), fileName);
 
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
+      const browser = await this.getBrowser();
       try {
         const page = await browser.newPage();
         await page.setContent(html, { waitUntil: 'load' });
@@ -90,21 +102,30 @@ export class ReportProcessor extends WorkerHost {
           timeout: 10000,
         });
         await page.pdf({
-          path: filePath,
+          path: tmpPath,
           format: 'A4',
           printBackground: true,
           margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' },
         });
+        await page.close();
       } finally {
-        await browser.close();
       }
 
+      const fileBuffer = await fs.readFile(tmpPath);
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: REPORTS_BUCKET,
+          Key: fileName,
+          Body: fileBuffer,
+          ContentType: 'application/pdf',
+        }),
+      );
       await this.prisma.reportTask.update({
         where: { id: taskId },
         data: {
           status: 'COMPLETED',
           progress: 100,
-          filePath: filePath,
+          fileKey: fileName,
         },
       });
       await job.updateProgress(100);
