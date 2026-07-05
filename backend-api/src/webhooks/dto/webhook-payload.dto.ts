@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsNumber, IsPositive } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsPositive,
+  IsEmail,
+} from 'class-validator';
 
 export class WebhookPayloadDto {
   @IsString()
@@ -11,4 +17,19 @@ export class WebhookPayloadDto {
 
   @IsString()
   currency: string;
+
+  @IsEmail()
+  customerEmail: string;
+
+  @IsString()
+  @IsNotEmpty()
+  customerFirstName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  customerLastName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  productName: string;
 }

@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { PaymentProcessor } from './processors/payment.processor';
 import { ReportProcessor } from './processors/report.processor';
+import { ProcessorsModule } from './processors/processors.module';
 
 @Module({
   imports: [
@@ -13,12 +14,9 @@ import { ReportProcessor } from './processors/report.processor';
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
       },
     }),
-    BullModule.registerQueue(
-      { name: 'report-queue' },
-      { name: 'webhook-queue' },
-    ),
     PrismaModule,
+    ProcessorsModule, // Import the ProcessorsModule to register the processors
   ],
-  providers: [ReportProcessor, PaymentProcessor], // We will create this next
+  providers: [], // We will create this next
 })
 export class AppModule {}

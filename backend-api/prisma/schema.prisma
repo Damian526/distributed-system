@@ -36,6 +36,9 @@ model ReportTask {
 model Customer {
   id        String   @id @default(uuid())
   email     String   @unique
+  firstName String
+  lastName  String
+  city      String
   country   String
   createdAt DateTime @default(now())
   orders    Order[]
@@ -46,12 +49,12 @@ model Customer {
 model Order {
   id            String        @id @default(uuid())
   transactionId String        @unique @map("transaction_id")
-  customerId    String?       @map("customer_id")
+  customerId    String        @map("customer_id")
   amount        Decimal       @db.Decimal(10, 2)
   currency      String        @default("PLN")
   status        PaymentStatus @default(PAID)
+  productName   String       @map("product_name")
   createdAt     DateTime      @default(now())
-  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   @@map("orders")
 }

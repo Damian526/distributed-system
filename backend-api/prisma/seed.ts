@@ -27,12 +27,14 @@ async function main() {
       prisma.customer.create({
         data: {
           email: faker.internet.email(),
+          firstName: faker.person.firstName(),
+          lastName: faker.person.lastName(),
           country: faker.helpers.arrayElement(COUNTRIES),
+          city: faker.location.city(),
         },
       }),
     ),
   );
-
   console.log(`✅ Created ${customers.length} customers`);
 
   // ── Orders ─────────────────────────────────────────────────
@@ -60,6 +62,7 @@ async function main() {
             }),
             currency: faker.helpers.arrayElement(CURRENCIES),
             status: faker.helpers.arrayElement(STATUSES),
+            productName: faker.commerce.productName(),
             createdAt: faker.date.past({ years: 1 }),
           },
         });
