@@ -3,8 +3,11 @@ interface ReportData {
   scopeRegion: string;
   totalSales: number;
   orderCount: number;
-  monthlySales: number[]; // 12 values, Jan–Dec
+  monthlySales: number[];
   statusBreakdown: { paid: number; refunded: number; failed: number };
+  currencyBreakdown: Record<string, number>;
+  topCustomers: { name: string; total: number }[];
+  topProducts: { name: string; revenue: number }[];
 }
 
 export function buildReportHtml(data: ReportData): string {
@@ -69,35 +72,70 @@ export function buildReportHtml(data: ReportData): string {
     </div>
   </div>
 
-  <div class="chart-row">
-    <div class="chart-box">
-      <h3>Monthly Sales</h3>
-      <canvas id="monthlyChart"></canvas>
-    </div>
-    <div class="chart-box">
-      <h3>Order Status</h3>
-      <canvas id="statusChart"></canvas>
-    </div>
+ <div class="chart-row">
+  <div class="chart-box">
+    <h3>📈 Monthly Sales</h3>
+    <canvas id="monthlyChart"></canvas>
   </div>
+  <div class="chart-box">
+    <h3>📊 Order Status</h3>
+    <canvas id="statusChart"></canvas>
+  </div>
+</div>
 
-  <h3 style="margin-bottom: 8px; color:#444;">Monthly Breakdown</h3>
-  <table>
-    <thead><tr><th>Month</th><th>Sales</th></tr></thead>
-    <tbody>
-      ${data.monthlySales.map((v, i) => `<tr><td>${monthLabels[i]}</td><td>$${v.toLocaleString()}</td></tr>`).join('')}
-    </tbody>
-  </table>
+ <div class="chart-row">
+  <div class="chart-box">
+    <h3>🏆 Top Customers</h3>
+    <table>
+      <thead><tr><th>Customer</th><th>Spend</th></tr></thead>
+      <tbody>
+        ${data.topCustomers.map((c) => `<tr><td>${c.name}</td><td>$${Math.round(c.total).toLocaleString()}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+  <div class="chart-box">
+    <h3>📦 Top Products</h3>
+    <table>
+      <thead><tr><th>Product</th><th>Revenue</th></tr></thead>
+      <tbody>
+        ${data.topProducts.map((p) => `<tr><td>${p.name}</td><td>$${p.revenue.toLocaleString()}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>
+<h3 style="margin-bottom: 8px; color:#444;">Sales by Currency</h3>
+<table>
+  <thead><tr><th>Currency</th><th>Total</th></tr></thead>
+  <tbody>
+    ${Object.entries(data.currencyBreakdown)
+      .map(
+        ([cur, amt]) =>
+          `<tr><td>${cur}</td><td>${Math.round(amt).toLocaleString()}</td></tr>`,
+      )
+      .join('')}
+  </tbody>
+</table>
 
   <div class="footer">SaaS Analytics Platform — Confidential</div>
 
   <script>
+    window.chartsReady = false;
+    let chartsRendered = 0;
+    function onChartRendered() {
+      chartsRendered++;
+      if (chartsRendered === 2) window.chartsReady = true;
+    }
+
     new Chart(document.getElementById('monthlyChart'), {
       type: 'bar',
       data: {
         labels: ${JSON.stringify(monthLabels)},
         datasets: [{ label: 'Sales ($)', data: ${JSON.stringify(data.monthlySales)}, backgroundColor: '#7c3aed' }]
       },
-      options: { animation: false, plugins: { legend: { display: false } } }
+      options: {
+        animation: { onComplete: onChartRendered },
+        plugins: { legend: { display: false } }
+      }
     });
 
     new Chart(document.getElementById('statusChart'), {
@@ -109,11 +147,8 @@ export function buildReportHtml(data: ReportData): string {
           backgroundColor: ['#22c55e', '#f59e0b', '#ef4444']
         }]
       },
-      options: { animation: false }
+      options: { animation: { onComplete: onChartRendered } }
     });
-
-    // Signal to Puppeteer that charts are drawn
-    window.chartsReady = true;
   </script>
 </body>
 </html>`;

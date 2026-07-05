@@ -31,5 +31,9 @@ export class WebhookPayloadDto {
 
   @IsString()
   @IsNotEmpty()
+  customerCity: string;
+
+  @IsString()
+  @IsNotEmpty()
   productName: string;
 }

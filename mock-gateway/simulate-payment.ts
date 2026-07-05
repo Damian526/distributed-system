@@ -5,15 +5,22 @@ interface MockPaymentPayload {
   transactionId: string;
   amount: number;
   currency: string;
+  customerEmail: string;
+  productName: string;
 }
 
 const SUPPORTED_CURRENCIES = ["PLN", "EUR", "USD", "GBP"] as const;
 
-async function triggerWebhook(index: number): Promise<void> {
+async function triggerWebhook(
+  index: number,
+  customerEmail: string,
+): Promise<void> {
   const payload: MockPaymentPayload = {
     transactionId: `txn_${faker.string.alphanumeric(16)}`,
     amount: faker.number.float({ min: 10, max: 5000, fractionDigits: 2 }),
     currency: faker.helpers.arrayElement(SUPPORTED_CURRENCIES),
+    customerEmail,
+    productName: faker.commerce.productName(),
   };
 
   console.log(`⏳ [${index}] Sending...`, payload);
@@ -40,7 +47,8 @@ async function runSimulation(count: number, delayMs: number): Promise<void> {
   console.log(`🚀 Firing ${count} payments, ${delayMs}ms apart\n`);
 
   for (let i = 1; i <= count; i++) {
-    await triggerWebhook(i);
+    const customerEmail = faker.internet.email();
+    await triggerWebhook(i, customerEmail);
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 

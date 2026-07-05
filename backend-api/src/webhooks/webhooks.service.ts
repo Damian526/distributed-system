@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { WebhookPayloadDto } from './dto/webhook-payload.dto';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class WebhooksService {
@@ -20,18 +20,19 @@ export class WebhooksService {
         transactionId: dto.transactionId,
         amount: dto.amount,
         currency: dto.currency,
+        customerEmail: dto.customerEmail,
+        customerFirstName: dto.customerFirstName,
+        customerLastName: dto.customerLastName,
+        customerCity: dto.customerCity,
+        productName: dto.productName,
       },
       {
-        // Using transactionId as the jobId means Redis ignores duplicates.
         jobId: dto.transactionId,
-        // Auto-clean finished/failed jobs so Redis doesn't fill up.
         removeOnComplete: true,
         removeOnFail: 100,
       },
     );
-
-    this.logger.log(`📨 Queued payment: ${dto.transactionId}`);
-
+    this.logger.log(`Queue payment: ${dto.transactionId}`);
     return { received: true, transactionId: dto.transactionId };
   }
 }

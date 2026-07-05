@@ -52,7 +52,16 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
           createdAt: { gte: start, lte: end },
           customer: { country: scopeRegion },
         },
-        select: { amount: true, status: true, createdAt: true },
+        select: {
+          amount: true,
+          status: true,
+          currency: true,
+          productName: true,
+          createdAt: true,
+          customer: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+        },
       });
 
       // Update progress
@@ -64,15 +73,33 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
 
       const monthlySales = new Array(12).fill(0);
       const statusBreakdown = { paid: 0, refunded: 0, failed: 0 };
+      const currencyBreakdown: Record<string, number> = {};
+      const productRevenue: Record<string, number> = {};
+      const customerSpend: Record<string, { name: string; total: number }> = {};
       let totalSales = 0;
 
       for (const o of orders) {
         const amount = Number(o.amount);
         const month = o.createdAt.getMonth();
+
         if (o.status === 'PAID') {
           monthlySales[month] += amount;
           totalSales += amount;
           statusBreakdown.paid++;
+          currencyBreakdown[o.currency] =
+            (currencyBreakdown[o.currency] || 0) + amount;
+          if (o.productName) {
+            productRevenue[o.productName] =
+              (productRevenue[o.productName] || 0) + amount;
+          }
+          if (o.customer) {
+            const key = o.customer.id;
+            const name =
+              `${o.customer.firstName ?? ''} ${o.customer.lastName ?? ''}`.trim() ||
+              o.customer.email;
+            if (!customerSpend[key]) customerSpend[key] = { name, total: 0 };
+            customerSpend[key].total += amount;
+          }
         } else if (o.status === 'REFUNDED') {
           statusBreakdown.refunded++;
         } else if (o.status === 'FAILED') {
@@ -80,6 +107,13 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
         }
       }
 
+      const topCustomers = Object.values(customerSpend)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
+      const topProducts = Object.entries(productRevenue)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, revenue]) => ({ name, revenue: Math.round(revenue) }));
       const monthlyRouned = monthlySales.map((v) => Math.round(v));
 
       const html = buildReportHtml({
@@ -89,6 +123,9 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
         orderCount: orders.length,
         monthlySales: monthlyRouned,
         statusBreakdown,
+        currencyBreakdown,
+        topCustomers,
+        topProducts,
       });
 
       const fileName = `report_${year}_${scopeRegion}_${Date.now()}.pdf`;
