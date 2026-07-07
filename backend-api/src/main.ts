@@ -10,12 +10,21 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import * as express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const logger = new Logger('Bootstrap');
 
-  app.use('/api/webhooks', express.raw({ type: 'application/json' })); // This is required for Stripe webhooks to work properly
+  // Stripe needs the raw, unparsed body to verify webhook signatures — everything
+  // else needs normal JSON parsing, which Nest's default parser was disabled for above.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.originalUrl === '/api/webhooks') {
+      express.raw({ type: 'application/json' })(req, res, next);
+    } else {
+      express.json()(req, res, next);
+    }
+  });
 
   // Global Validation Pipe
   // This automatically uses your DTO classes to block bad data (e.g., if someone sends a string instead of a number for the year)

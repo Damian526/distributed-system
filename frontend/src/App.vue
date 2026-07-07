@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import axios from 'axios'
+import CheckoutTab from './components/CheckoutTab.vue'
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -86,53 +87,67 @@ onUnmounted(() => {
   <div class="dashboard-layout">
     <Card
       style="
-        width: 40rem;
+        width: 44rem;
         padding: 1rem;
         border-radius: 12px;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
       "
     >
       <template #title>
-        <h2>📊 E-Commerce Financial Reports</h2>
+        <h2>🧾 SaaS Analytics Platform</h2>
       </template>
 
       <template #content>
-        <p>Request an intensive PDF report from the background analytics engine.</p>
+        <Tabs value="0">
+          <TabList>
+            <Tab value="0"><i class="pi pi-chart-bar" /> Raporty</Tab>
+            <Tab value="1"><i class="pi pi-credit-card" /> Checkout</Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel value="0">
+              <p>Request an intensive PDF report from the background analytics engine.</p>
 
-        <Button
-          label="Generate 2026 PDF Report"
-          icon="pi pi-file-pdf"
-          @click="generateReport"
-          :loading="isLoading && currentTask?.progress === 0"
-          :disabled="isLoading"
-          style="margin-top: 1rem; margin-bottom: 2rem"
-        />
-        <Message v-if="errorMessage" severity="error" style="margin-top: 1rem">
-          {{ errorMessage }}
-        </Message>
+              <Button
+                label="Generate 2026 PDF Report"
+                icon="pi pi-file-pdf"
+                @click="generateReport"
+                :loading="isLoading && currentTask?.progress === 0"
+                :disabled="isLoading"
+                style="margin-top: 1rem; margin-bottom: 2rem"
+              />
+              <Message v-if="errorMessage" severity="error" style="margin-top: 1rem">
+                {{ errorMessage }}
+              </Message>
 
-        <div v-if="currentTask">
-          <hr style="margin-bottom: 1.5rem; opacity: 0.2" />
+              <div v-if="currentTask">
+                <hr style="margin-bottom: 1.5rem; opacity: 0.2" />
 
-          <h3>
-            System Status: <strong>{{ currentTask.status }}</strong>
-          </h3>
+                <h3>
+                  System Status: <strong>{{ currentTask.status }}</strong>
+                </h3>
 
-          <ProgressBar :value="currentTask.progress" style="height: 24px; margin-top: 1rem">
-            {{ currentTask.progress }}%
-          </ProgressBar>
+                <ProgressBar :value="currentTask.progress" style="height: 24px; margin-top: 1rem">
+                  {{ currentTask.progress }}%
+                </ProgressBar>
 
-          <div v-if="currentTask.status === 'COMPLETED'" style="margin-top: 1.5rem">
-            <Message severity="success">PDF successfully generated!</Message>
-            <Button
-              label="Download PDF"
-              icon="pi pi-download"
-              severity="success"
-              outlined
-              @click="downoloadReport"
-            />
-          </div>
-        </div>
+                <div v-if="currentTask.status === 'COMPLETED'" style="margin-top: 1.5rem">
+                  <Message severity="success">PDF successfully generated!</Message>
+                  <Button
+                    label="Download PDF"
+                    icon="pi pi-download"
+                    severity="success"
+                    outlined
+                    @click="downoloadReport"
+                  />
+                </div>
+              </div>
+            </TabPanel>
+
+            <TabPanel value="1">
+              <CheckoutTab />
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
       </template>
     </Card>
   </div>

@@ -16,6 +16,10 @@ export class PaymentProcessor extends WorkerHost {
       currency: string;
       customerEmail: string;
       status: PaymentStatus;
+      customerFirstName: string;
+      customerLastName: string;
+      country: string;
+      city: string;
       productName?: string;
     }>,
   ): Promise<void> {
@@ -25,6 +29,10 @@ export class PaymentProcessor extends WorkerHost {
       currency,
       customerEmail,
       status,
+      customerFirstName,
+      customerLastName,
+      country,
+      city,
       productName,
     } = job.data;
 
@@ -33,13 +41,13 @@ export class PaymentProcessor extends WorkerHost {
     try {
       const customer = await this.prisma.customer.upsert({
         where: { email: customerEmail },
-        update: {},
+        update: {}, // istniejący klient — nie nadpisujemy
         create: {
           email: customerEmail,
-          firstName: 'Stripe',
-          lastName: 'Customer',
-          country: 'PL',
-          city: 'Warsaw',
+          firstName: customerFirstName,
+          lastName: customerLastName,
+          country,
+          city,
         },
       });
 

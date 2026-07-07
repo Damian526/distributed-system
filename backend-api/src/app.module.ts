@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReportsModule } from './reports/reports.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { CheckoutModule } from './checkout/checkout.module';
 import { BullBoardModule } from '@bull-board/nestjs';
 import { ExpressAdapter } from '@bull-board/express';
 @Module({
@@ -20,6 +21,7 @@ import { ExpressAdapter } from '@bull-board/express';
     PrismaModule,
     ReportsModule,
     WebhooksModule,
+    CheckoutModule,
   ],
 })
 export class AppModule {}

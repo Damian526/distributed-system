@@ -7,6 +7,9 @@ import Stripe from 'stripe';
 @Injectable()
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
+  private readonly stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
+    apiVersion: '2026-06-24.dahlia',
+  });
 
   constructor(
     @InjectQueue('webhook-queue') private readonly webhookQueue: Queue,
@@ -22,6 +25,38 @@ export class WebhooksService {
         await this.queuePaymentEvent(event, 'FAILED');
         break;
 
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+
+        // Stripe nie wysyła nazwy produktu w samej sesji — trzeba dociągnąć line items
+        const lineItems = await this.stripe.checkout.sessions.listLineItems(
+          session.id,
+        );
+        const productName = lineItems.data[0]?.description || 'Unknown Product';
+
+        await this.webhookQueue.add(
+          'process-payment',
+          {
+            transactionId: session.id,
+            amount: (session.amount_total ?? 0) / 100,
+            currency: (session.currency ?? 'usd').toUpperCase(),
+            customerEmail:
+              session.customer_details?.email || 'unknown@example.com',
+            customerFirstName:
+              session.customer_details?.name?.split(' ')[0] || 'Unknown',
+            customerLastName:
+              session.customer_details?.name?.split(' ')[1] || 'Customer',
+            country: session.customer_details?.address?.country || 'PL', // NAPRAWDĘ wpisany kraj!
+            city: session.customer_details?.address?.city || 'Unknown',
+            status: 'PAID',
+            productName,
+          },
+          { jobId: session.id, removeOnComplete: true, removeOnFail: 100 },
+        );
+
+        this.logger.log(`📨 Queued real checkout payment: ${session.id}`);
+        break;
+      }
       case 'charge.refunded': {
         const charge = event.data.object as Stripe.Charge;
         await this.webhookQueue.add(
