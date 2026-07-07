@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { PaymentStatus, Prisma } from '@prisma/client';
 @Processor('webhook-queue')
 export class PaymentProcessor extends WorkerHost {
   private readonly logger = new Logger(PaymentProcessor.name);
@@ -15,11 +15,18 @@ export class PaymentProcessor extends WorkerHost {
       amount: number;
       currency: string;
       customerEmail: string;
+      status: PaymentStatus;
       productName?: string;
     }>,
   ): Promise<void> {
-    const { transactionId, amount, currency, customerEmail, productName } =
-      job.data;
+    const {
+      transactionId,
+      amount,
+      currency,
+      customerEmail,
+      status,
+      productName,
+    } = job.data;
 
     this.logger.log(`📥 Processing payment job: ${job.id}`);
 
@@ -41,7 +48,7 @@ export class PaymentProcessor extends WorkerHost {
           transactionId,
           amount,
           currency,
-          status: 'PAID',
+          status,
           productName: productName || 'Unknown Product',
           customerId: customer.id,
         },

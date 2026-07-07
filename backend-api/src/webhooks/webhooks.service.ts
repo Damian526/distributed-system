@@ -13,28 +13,63 @@ export class WebhooksService {
   ) {}
 
   async handleStripeEvent(event: Stripe.Event): Promise<void> {
-    if (event.type !== 'payment_intent.succeeded') {
-      this.logger.log(`ℹ️ Ignoring unhandled event type: ${event.type}`);
-      return;
-    }
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        await this.queuePaymentEvent(event, 'PAID');
+        break;
 
+      case 'payment_intent.payment_failed':
+        await this.queuePaymentEvent(event, 'FAILED');
+        break;
+
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge;
+        await this.webhookQueue.add(
+          'process-payment',
+          {
+            transactionId: charge.payment_intent as string, // refunds reference the original payment
+            amount: charge.amount / 100,
+            currency: charge.currency.toUpperCase(),
+            customerEmail: charge.receipt_email || 'test@example.com',
+            status: 'REFUNDED',
+          },
+          {
+            jobId: `${charge.payment_intent}_refund`, // different jobId so it doesn't collide with the original PAID job
+            removeOnComplete: true,
+            removeOnFail: 100,
+          },
+        );
+        this.logger.log(`📨 Queued refund: ${charge.payment_intent}`);
+        break;
+      }
+
+      default:
+        this.logger.log(`ℹ️ Ignoring unhandled event type: ${event.type}`);
+    }
+  }
+
+  private async queuePaymentEvent(
+    event: Stripe.Event,
+    status: 'PAID' | 'FAILED',
+  ): Promise<void> {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
     await this.webhookQueue.add(
       'process-payment',
       {
-        transactionId: paymentIntent.id, // e.g. "pi_3Nx..."
-        amount: paymentIntent.amount / 100, // Stripe uses cents — convert to whole units
-        currency: paymentIntent.currency.toUpperCase(), // e.g. "usd" → "USD"
+        transactionId: paymentIntent.id,
+        amount: paymentIntent.amount / 100,
+        currency: paymentIntent.currency.toUpperCase(),
         customerEmail: paymentIntent.receipt_email || 'test@example.com',
+        status,
       },
       {
-        jobId: paymentIntent.id, // dedupe by Stripe's own ID
+        jobId: paymentIntent.id,
         removeOnComplete: true,
         removeOnFail: 100,
       },
     );
 
-    this.logger.log(`📨 Queued payment: ${paymentIntent.id}`);
+    this.logger.log(`📨 Queued ${status} payment: ${paymentIntent.id}`);
   }
 }
