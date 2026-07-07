@@ -15,22 +15,12 @@ export class PaymentProcessor extends WorkerHost {
       amount: number;
       currency: string;
       customerEmail: string;
-      customerFirstName: string;
-      customerLastName: string;
-      customerCity: string;
-      productName: string;
+      productName?: string;
     }>,
   ): Promise<void> {
-    const {
-      transactionId,
-      amount,
-      currency,
-      customerEmail,
-      customerFirstName,
-      customerLastName,
-      customerCity,
-      productName,
-    } = job.data;
+    const { transactionId, amount, currency, customerEmail, productName } =
+      job.data;
+
     this.logger.log(`📥 Processing payment job: ${job.id}`);
 
     try {
@@ -39,10 +29,10 @@ export class PaymentProcessor extends WorkerHost {
         update: {},
         create: {
           email: customerEmail,
-          firstName: customerFirstName,
-          lastName: customerLastName,
-          city: customerCity,
+          firstName: 'Stripe',
+          lastName: 'Customer',
           country: 'PL',
+          city: 'Warsaw',
         },
       });
 
@@ -52,7 +42,7 @@ export class PaymentProcessor extends WorkerHost {
           amount,
           currency,
           status: 'PAID',
-          productName,
+          productName: productName || 'Unknown Product',
           customerId: customer.id,
         },
       });

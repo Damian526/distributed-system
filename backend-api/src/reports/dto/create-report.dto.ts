@@ -4,9 +4,9 @@ export class CreateReportDto {
   @IsInt()
   @Min(2000)
   @Max(2100)
-  year: number;
+  year!: number;
 
   @IsString()
   @IsNotEmpty()
-  scopeRegion: string;
+  scopeRegion!: string;
 }

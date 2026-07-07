@@ -9,31 +9,31 @@ import {
 export class WebhookPayloadDto {
   @IsString()
   @IsNotEmpty()
-  transactionId: string;
+  transactionId!: string;
 
   @IsNumber()
   @IsPositive()
-  amount: number;
+  amount!: number;
 
   @IsString()
-  currency: string;
+  currency!: string;
 
   @IsEmail()
-  customerEmail: string;
+  customerEmail!: string;
 
   @IsString()
   @IsNotEmpty()
-  customerFirstName: string;
+  customerFirstName!: string;
 
   @IsString()
   @IsNotEmpty()
-  customerLastName: string;
+  customerLastName!: string;
 
   @IsString()
   @IsNotEmpty()
-  customerCity: string;
+  customerCity!: string;
 
   @IsString()
   @IsNotEmpty()
-  productName: string;
+  productName!: string;
 }

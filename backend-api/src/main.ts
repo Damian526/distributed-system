@@ -1,13 +1,21 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-dotenv.config({ path: path.resolve(process.cwd(), `.env.${process.env.NODE_ENV || 'development'}`) });
+dotenv.config({
+  path: path.resolve(
+    process.cwd(),
+    `.env.${process.env.NODE_ENV || 'development'}`,
+  ),
+});
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
   const logger = new Logger('Bootstrap');
+
+  app.use('/api/webhooks', express.raw({ type: 'application/json' })); // This is required for Stripe webhooks to work properly
 
   // Global Validation Pipe
   // This automatically uses your DTO classes to block bad data (e.g., if someone sends a string instead of a number for the year)
