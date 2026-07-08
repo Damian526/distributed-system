@@ -1,6 +1,7 @@
+import { COUNTRY_NAMES } from './fx-rates';
+
 interface ReportData {
   year: number;
-  scopeRegion: string;
   currencySymbol: string;
   totalSales: number;
   orderCount: number;
@@ -10,6 +11,7 @@ interface ReportData {
   monthlySales: number[];
   statusBreakdown: { paid: number; refunded: number; failed: number };
   currencyBreakdown: Record<string, number>;
+  regionRevenue: Record<string, number>;
   topCustomers: { name: string; total: number }[];
   topProducts: { name: string; revenue: number }[];
 }
@@ -40,6 +42,14 @@ export function buildReportHtml(data: ReportData): string {
   const customerValues = data.topCustomers.map((c) => Math.round(c.total));
   const productLabels = data.topProducts.map((p) => p.name);
   const productValues = data.topProducts.map((p) => p.revenue);
+
+  const regionSorted = Object.entries(data.regionRevenue).sort(
+    (a, b) => b[1] - a[1],
+  );
+  const regionLabels = regionSorted.map(
+    ([code]) => COUNTRY_NAMES[code] ?? code,
+  );
+  const regionValues = regionSorted.map(([, v]) => Math.round(v));
 
   return `
 <!DOCTYPE html>
@@ -95,8 +105,10 @@ export function buildReportHtml(data: ReportData): string {
   .panel h3 { font-size: 14px; font-weight: 700; color: #1e1b2e; margin-bottom: 4px; }
   .panel .sub { font-size: 11px; color: #9b98a8; margin-bottom: 10px; }
   .canvas-wrap { position: relative; width: 100%; }
-  .h-tall { height: 240px; }
-  .h-mid { height: 220px; }
+  .h-tall { height: 320px; }
+  .h-mid { height: 320px; }
+  .h-xl { height: 460px; }
+  .page-break { page-break-before: always; break-before: page; }
 
   .footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #ece9f5; text-align: center; color: #b0adbe; font-size: 11px; }
 </style>
@@ -105,7 +117,7 @@ export function buildReportHtml(data: ReportData): string {
   <div class="header">
     <div class="eyebrow">SaaS Analytics Platform</div>
     <h1>Financial Report ${data.year}</h1>
-    <div class="meta">Region: <strong>${data.scopeRegion}</strong> &nbsp;•&nbsp; Reporting currency: <strong>${sym}</strong> &nbsp;•&nbsp; Generated ${new Date().toLocaleDateString()}</div>
+    <div class="meta">Scope: <strong>Worldwide 🌍</strong> &nbsp;•&nbsp; Reporting currency: <strong>${sym}</strong> &nbsp;•&nbsp; Generated ${new Date().toLocaleDateString()}</div>
     <div class="rule"></div>
   </div>
 
@@ -141,7 +153,7 @@ export function buildReportHtml(data: ReportData): string {
 
   ${
     multiCurrency
-      ? `<p class="fx-note">💱 All amounts are converted to ${sym} (${data.scopeRegion}'s settlement currency) using indicative exchange rates, so totals across currencies are comparable.</p>`
+      ? `<p class="fx-note">💱 This is a worldwide report. All amounts are converted to ${sym} using indicative exchange rates, so totals across currencies and regions are comparable.</p>`
       : ''
   }
 
@@ -155,22 +167,27 @@ export function buildReportHtml(data: ReportData): string {
 
   <div class="chart-row">
     <div class="panel">
+      <h3>🌍 Revenue by Region</h3>
+      <div class="sub">Share of revenue by country (in ${sym})</div>
+      <div class="canvas-wrap h-mid"><canvas id="regionChart"></canvas></div>
+    </div>
+    <div class="panel">
       <h3>📊 Order Status</h3>
       <div class="sub">Paid vs refunded vs failed</div>
       <div class="canvas-wrap h-mid"><canvas id="statusChart"></canvas></div>
     </div>
     <div class="panel">
       <h3>💱 Sales by Currency</h3>
-      <div class="sub">Share of revenue by original currency (in ${sym})</div>
+      <div class="sub">Share by original currency (in ${sym})</div>
       <div class="canvas-wrap h-mid"><canvas id="currencyChart"></canvas></div>
     </div>
   </div>
 
-  <div class="chart-row">
+  <div class="chart-row page-break">
     <div class="panel">
       <h3>📦 Top Products</h3>
       <div class="sub">Revenue by product (${sym})</div>
-      <div class="canvas-wrap h-tall"><canvas id="productsChart"></canvas></div>
+      <div class="canvas-wrap h-xl"><canvas id="productsChart"></canvas></div>
     </div>
   </div>
 
@@ -178,7 +195,7 @@ export function buildReportHtml(data: ReportData): string {
     <div class="panel">
       <h3>🏆 Top Customers</h3>
       <div class="sub">Spend by customer (${sym})</div>
-      <div class="canvas-wrap h-tall"><canvas id="customersChart"></canvas></div>
+      <div class="canvas-wrap h-xl"><canvas id="customersChart"></canvas></div>
     </div>
   </div>
 
@@ -208,6 +225,25 @@ export function buildReportHtml(data: ReportData): string {
         maintainAspectRatio: false,
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => money(c.parsed.y) } } },
         scales: { y: { ticks: { callback: (v) => money(v) }, grid: { color: '#f0eef7' } }, x: { grid: { display: false } } }
+      }
+    });
+
+    new Chart(document.getElementById('regionChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ${JSON.stringify(regionLabels)},
+        datasets: [{ data: ${JSON.stringify(regionValues)}, backgroundColor: PALETTE, borderWidth: 0 }]
+      },
+      options: {
+        maintainAspectRatio: false, cutout: '62%',
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: (c) => {
+            const total = c.dataset.data.reduce((a, b) => a + b, 0) || 1;
+            const pct = Math.round((c.parsed / total) * 100);
+            return c.label + ': ' + money(c.parsed) + ' (' + pct + '%)';
+          } } }
+        }
       }
     });
 

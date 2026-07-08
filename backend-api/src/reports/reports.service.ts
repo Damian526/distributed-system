@@ -30,4 +30,11 @@ export class ReportsService {
     if (!task) throw new NotFoundException('Report not found');
     return task;
   }
+
+  async listRecent(limit = 20): Promise<ReportTask[]> {
+    return this.prisma.reportTask.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
 }

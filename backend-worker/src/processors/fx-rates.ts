@@ -25,6 +25,21 @@ export const REGION_CURRENCY: Record<string, string> = {
   US: 'USD',
 };
 
+// the whole report is global now, so everything totals up in one currency
+export const GLOBAL_CURRENCY = 'USD';
+
+// friendly names for the country codes we store on customers
+export const COUNTRY_NAMES: Record<string, string> = {
+  PL: 'Poland',
+  DE: 'Germany',
+  FR: 'France',
+  NL: 'Netherlands',
+  ES: 'Spain',
+  CZ: 'Czechia',
+  GB: 'United Kingdom',
+  US: 'United States',
+};
+
 export function convertCurrency(amount: number, from: string, to: string): number {
   if (from === to) return amount;
   const fromRate = RATES_TO_USD[from] ?? 1;

@@ -29,6 +29,11 @@ export class ReportsController {
     return this.reportsService.generateReport(dto.year, dto.scopeRegion);
   }
 
+  @Get()
+  async listRecent(): Promise<ReportTask[]> {
+    return this.reportsService.listRecent();
+  }
+
   @Get(':id')
   async getStatus(@Param('id', ParseUUIDPipe) id: string): Promise<ReportTask> {
     return this.reportsService.getReportStatus(id);

@@ -23,7 +23,7 @@ async function triggerWebhook(
     productName: faker.commerce.productName(),
   };
 
-  console.log(`⏳ [${index}] Sending...`, payload);
+  console.log(`[${index}] Sending...`, payload);
 
   try {
     const response = await axios.post(
