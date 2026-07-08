@@ -28,7 +28,7 @@ export class WebhooksService {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
 
-        // Stripe nie wysyła nazwy produktu w samej sesji — trzeba dociągnąć line items
+        // session itself has no product name, gotta fetch the line items for that
         const lineItems = await this.stripe.checkout.sessions.listLineItems(
           session.id,
         );
@@ -46,7 +46,7 @@ export class WebhooksService {
               session.customer_details?.name?.split(' ')[0] || 'Unknown',
             customerLastName:
               session.customer_details?.name?.split(' ')[1] || 'Customer',
-            country: session.customer_details?.address?.country || 'PL', // NAPRAWDĘ wpisany kraj!
+            country: session.customer_details?.address?.country || 'PL', // the actual country they typed in
             city: session.customer_details?.address?.city || 'Unknown',
             status: 'PAID',
             productName,
@@ -62,14 +62,14 @@ export class WebhooksService {
         await this.webhookQueue.add(
           'process-payment',
           {
-            transactionId: charge.payment_intent as string, // refunds reference the original payment
+            transactionId: charge.payment_intent as string, // refund points back to the original payment
             amount: charge.amount / 100,
             currency: charge.currency.toUpperCase(),
             customerEmail: charge.receipt_email || 'test@example.com',
             status: 'REFUNDED',
           },
           {
-            jobId: `${charge.payment_intent}_refund`, // different jobId so it doesn't collide with the original PAID job
+            jobId: `${charge.payment_intent}_refund`, // needs its own id so it doesn't clash with the PAID job
             removeOnComplete: true,
             removeOnFail: 100,
           },

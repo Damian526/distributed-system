@@ -7,11 +7,9 @@ import { Logger } from '@nestjs/common';
 async function bootstrap() {
   const logger = new Logger('WorkerBootstrap');
 
-  // 1. 'createApplicationContext' boots up NestJS WITHOUT starting an HTTP server (no port 3000).
-  // This saves RAM and is the best practice for background processors.
+  // no need for an HTTP server here, this app only listens to queues
   const app = await NestFactory.createApplicationContext(AppModule);
 
-  // 2. The app will now stay alive in the background, listening to Redis.
   logger.log('👷 Background Worker is alive and listening to Redis queues...');
 }
 bootstrap();

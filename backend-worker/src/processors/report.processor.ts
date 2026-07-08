@@ -6,6 +6,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import puppeteer, { Browser } from 'puppeteer';
 import { buildReportHtml } from './report-template';
+import { CURRENCY_SYMBOLS, REGION_CURRENCY, convertCurrency } from './fx-rates';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, REPORTS_BUCKET } from '../storage/s3.client';
 import * as os from 'os';
@@ -36,17 +37,16 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
     this.logger.log(`Starting report generation for Task ID: ${taskId}`);
 
     try {
-      //  Start the job: Change DB status from PENDING to PROCESSING
+      // mark the job as started
       await this.prisma.reportTask.update({
         where: { id: taskId },
         data: { status: 'PROCESSING', progress: 10 },
       });
-      await job.updateProgress(10); // Tells Redis we are at 10%
+      await job.updateProgress(10);
 
       const start = new Date(`${year}-01-01T00:00:00Z`);
       const end = new Date(`${year + 1}-01-01T00:00:00Z`);
 
-      // Simulate Heavy Database Analytics (Wait 3 seconds)
       const orders = await this.prisma.order.findMany({
         where: {
           createdAt: { gte: start, lte: end },
@@ -64,12 +64,16 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
         },
       });
 
-      // Update progress
+      // halfway there
       await this.prisma.reportTask.update({
         where: { id: taskId },
         data: { progress: 50 },
       });
       await job.updateProgress(50);
+
+      // convert everything to one currency so we're not adding PLN + EUR + USD like they're the same thing
+      const reportCurrency = REGION_CURRENCY[scopeRegion] ?? 'USD';
+      const currencySymbol = CURRENCY_SYMBOLS[reportCurrency] ?? reportCurrency;
 
       const monthlySales = new Array(12).fill(0);
       const statusBreakdown = { paid: 0, refunded: 0, failed: 0 };
@@ -79,15 +83,18 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
       let totalSales = 0;
 
       for (const o of orders) {
-        const amount = Number(o.amount);
+        const rawAmount = Number(o.amount);
         const month = o.createdAt.getMonth();
 
         if (o.status === 'PAID') {
+          const amount = convertCurrency(rawAmount, o.currency, reportCurrency);
+
           monthlySales[month] += amount;
           totalSales += amount;
           statusBreakdown.paid++;
+          // keep this one un-converted, it's just showing the real currency mix
           currencyBreakdown[o.currency] =
-            (currencyBreakdown[o.currency] || 0) + amount;
+            (currencyBreakdown[o.currency] || 0) + rawAmount;
           if (o.productName) {
             productRevenue[o.productName] =
               (productRevenue[o.productName] || 0) + amount;
@@ -109,18 +116,35 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
 
       const topCustomers = Object.values(customerSpend)
         .sort((a, b) => b.total - a.total)
-        .slice(0, 5);
+        .slice(0, 10)
+        .map((c) => ({ ...c, total: Math.round(c.total) }));
       const topProducts = Object.entries(productRevenue)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
+        .slice(0, 10)
         .map(([name, revenue]) => ({ name, revenue: Math.round(revenue) }));
       const monthlyRouned = monthlySales.map((v) => Math.round(v));
+
+      const totalOutcomes =
+        statusBreakdown.paid +
+        statusBreakdown.refunded +
+        statusBreakdown.failed;
+      const refundRate = totalOutcomes
+        ? Math.round((statusBreakdown.refunded / totalOutcomes) * 1000) / 10
+        : 0;
+      const failedRate = totalOutcomes
+        ? Math.round((statusBreakdown.failed / totalOutcomes) * 1000) / 10
+        : 0;
+      const uniqueCustomers = Object.keys(customerSpend).length;
 
       const html = buildReportHtml({
         year,
         scopeRegion,
+        currencySymbol,
         totalSales: Math.round(totalSales),
         orderCount: orders.length,
+        uniqueCustomers,
+        refundRate,
+        failedRate,
         monthlySales: monthlyRouned,
         statusBreakdown,
         currencyBreakdown,
@@ -171,13 +195,13 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      // 5. If ANYTHING fails (DB crashes, file system full), mark it as FAILED safely.
+      // something broke, save the error and mark the task as failed
       this.logger.error(`❌ Job failed: ${errorMessage}`);
       await this.prisma.reportTask.update({
         where: { id: taskId },
         data: { status: 'FAILED', errorMessage: errorMessage },
       });
-      throw error; // Let BullMQ know it failed so it can trigger a retry if configured.
+      throw error; // let BullMQ retry it if it's set up to
     }
   }
 }

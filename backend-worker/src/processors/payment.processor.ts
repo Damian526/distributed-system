@@ -41,7 +41,7 @@ export class PaymentProcessor extends WorkerHost {
     try {
       const customer = await this.prisma.customer.upsert({
         where: { email: customerEmail },
-        update: {}, // istniejący klient — nie nadpisujemy
+        update: {}, // customer already exists, leave their data alone
         create: {
           email: customerEmail,
           firstName: customerFirstName,

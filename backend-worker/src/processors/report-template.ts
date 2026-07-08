@@ -1,8 +1,14 @@
+import { CURRENCY_SYMBOLS } from './fx-rates';
+
 interface ReportData {
   year: number;
   scopeRegion: string;
+  currencySymbol: string;
   totalSales: number;
   orderCount: number;
+  uniqueCustomers: number;
+  refundRate: number;
+  failedRate: number;
   monthlySales: number[];
   statusBreakdown: { paid: number; refunded: number; failed: number };
   currencyBreakdown: Record<string, number>;
@@ -49,6 +55,7 @@ export function buildReportHtml(data: ReportData): string {
   th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
   th { background: #f5f3ff; color: #5b21b6; }
   .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; }
+  .fx-note { font-size: 12px; color: #7c3aed; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 10px 14px; margin-bottom: 24px; }
 </style>
 </head>
 <body>
@@ -60,7 +67,7 @@ export function buildReportHtml(data: ReportData): string {
   <div class="cards">
     <div class="card">
       <div class="label">Total Sales</div>
-      <div class="value">$${data.totalSales.toLocaleString()}</div>
+      <div class="value">${data.currencySymbol}${data.totalSales.toLocaleString()}</div>
     </div>
     <div class="card">
       <div class="label">Total Orders</div>
@@ -68,9 +75,30 @@ export function buildReportHtml(data: ReportData): string {
     </div>
     <div class="card">
       <div class="label">Avg Order Value</div>
-      <div class="value">$${(data.orderCount ? data.totalSales / data.orderCount : 0).toFixed(2)}</div>
+      <div class="value">${data.currencySymbol}${(data.orderCount ? data.totalSales / data.orderCount : 0).toFixed(2)}</div>
     </div>
   </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">Paying Customers</div>
+      <div class="value">${data.uniqueCustomers.toLocaleString()}</div>
+    </div>
+    <div class="card">
+      <div class="label">Refund Rate</div>
+      <div class="value">${data.refundRate}%</div>
+    </div>
+    <div class="card">
+      <div class="label">Failed Payment Rate</div>
+      <div class="value">${data.failedRate}%</div>
+    </div>
+  </div>
+
+  ${
+    Object.keys(data.currencyBreakdown).length > 1
+      ? `<p class="fx-note">💱 Amounts above are converted to ${data.currencySymbol} (${data.scopeRegion}'s settlement currency) using indicative exchange rates. See "Sales by Currency" below for original, unconverted totals.</p>`
+      : ''
+  }
 
  <div class="chart-row">
   <div class="chart-box">
@@ -89,7 +117,7 @@ export function buildReportHtml(data: ReportData): string {
     <table>
       <thead><tr><th>Customer</th><th>Spend</th></tr></thead>
       <tbody>
-        ${data.topCustomers.map((c) => `<tr><td>${c.name}</td><td>$${Math.round(c.total).toLocaleString()}</td></tr>`).join('')}
+        ${data.topCustomers.map((c) => `<tr><td>${c.name}</td><td>${data.currencySymbol}${Math.round(c.total).toLocaleString()}</td></tr>`).join('')}
       </tbody>
     </table>
   </div>
@@ -98,7 +126,7 @@ export function buildReportHtml(data: ReportData): string {
     <table>
       <thead><tr><th>Product</th><th>Revenue</th></tr></thead>
       <tbody>
-        ${data.topProducts.map((p) => `<tr><td>${p.name}</td><td>$${p.revenue.toLocaleString()}</td></tr>`).join('')}
+        ${data.topProducts.map((p) => `<tr><td>${p.name}</td><td>${data.currencySymbol}${p.revenue.toLocaleString()}</td></tr>`).join('')}
       </tbody>
     </table>
   </div>
@@ -110,7 +138,7 @@ export function buildReportHtml(data: ReportData): string {
     ${Object.entries(data.currencyBreakdown)
       .map(
         ([cur, amt]) =>
-          `<tr><td>${cur}</td><td>${Math.round(amt).toLocaleString()}</td></tr>`,
+          `<tr><td>${cur}</td><td>${CURRENCY_SYMBOLS[cur] ?? cur}${Math.round(amt).toLocaleString()}</td></tr>`,
       )
       .join('')}
   </tbody>
@@ -130,7 +158,7 @@ export function buildReportHtml(data: ReportData): string {
       type: 'bar',
       data: {
         labels: ${JSON.stringify(monthLabels)},
-        datasets: [{ label: 'Sales ($)', data: ${JSON.stringify(data.monthlySales)}, backgroundColor: '#7c3aed' }]
+        datasets: [{ label: 'Sales (${data.currencySymbol})', data: ${JSON.stringify(data.monthlySales)}, backgroundColor: '#7c3aed' }]
       },
       options: {
         animation: { onComplete: onChartRendered },

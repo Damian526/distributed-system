@@ -7,9 +7,9 @@ export class CreateCheckoutDto {
 
   @IsNumber()
   @IsPositive()
-  amount!: number; // in whole currency units, e.g. 49.99
+  amount!: number; // e.g. 49.99, not cents
 
   @IsString()
   @IsNotEmpty()
-  currency!: string; // "usd", "eur", "pln"
+  currency!: string; // lowercase, e.g. "usd"
 }

@@ -10,14 +10,14 @@ export class CheckoutService {
     const session = await this.stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
-      billing_address_collection: 'required', // this is what gives us a REAL country
+      billing_address_collection: 'required', // makes Stripe ask for a real address/country
       customer_creation: 'always',
       line_items: [
         {
           price_data: {
             currency: dto.currency,
             product_data: { name: dto.productName },
-            unit_amount: Math.round(dto.amount * 100), // Stripe uses cents
+            unit_amount: Math.round(dto.amount * 100), // Stripe counts in cents, not whole units
           },
           quantity: 1,
         },
@@ -26,6 +26,6 @@ export class CheckoutService {
       cancel_url: `${process.env.FRONTEND_URL}/checkout/cancel`,
     });
 
-    return { url: session.url }; // frontend redirects the browser here
+    return { url: session.url }; // frontend just redirects the browser here
   }
 }

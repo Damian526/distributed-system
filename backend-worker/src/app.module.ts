@@ -5,7 +5,7 @@ import { ProcessorsModule } from './processors/processors.module';
 
 @Module({
   imports: [
-    // 1. Tell the worker where the Redis waiting room is located.
+    // tells the worker where Redis lives
     BullModule.forRoot({
       connection: {
         host: process.env.REDIS_HOST || 'localhost',
@@ -13,8 +13,7 @@ import { ProcessorsModule } from './processors/processors.module';
       },
     }),
     PrismaModule,
-    ProcessorsModule, // Import the ProcessorsModule to register the processors
+    ProcessorsModule, // this is where the actual job processors live
   ],
-  providers: [], // We will create this next
 })
 export class AppModule {}

@@ -16,8 +16,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const logger = new Logger('Bootstrap');
 
-  // Stripe needs the raw, unparsed body to verify webhook signatures — everything
-  // else needs normal JSON parsing, which Nest's default parser was disabled for above.
+  // Stripe wants the raw body, everyone else wants normal JSON
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.originalUrl === '/api/webhooks') {
       express.raw({ type: 'application/json' })(req, res, next);
@@ -26,13 +25,12 @@ async function bootstrap() {
     }
   });
 
-  // Global Validation Pipe
-  // This automatically uses your DTO classes to block bad data (e.g., if someone sends a string instead of a number for the year)
+  // Checks every request body against its DTO
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Strips away any extra fields not defined in the DTO
-      forbidNonWhitelisted: true, // Throws an error if extra fields are sent
-      transform: true, // Automatically transforms payloads to match DTO classes
+      whitelist: true, // drop fields the DTO doesn't expect
+      forbidNonWhitelisted: true, // reject if extra fields show up
+      transform: true, // turn plain JSON into DTO instances
     }),
   );
 
