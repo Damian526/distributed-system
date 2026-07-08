@@ -14,8 +14,30 @@ interface ReportTask {
   createdAt: string
 }
 
+const YEAR_OPTIONS = [
+  { label: '2026', value: 2026 },
+  { label: '2025', value: 2025 },
+  { label: '2024', value: 2024 },
+]
+
+const REGION_OPTIONS = [
+  { label: '🌍 Worldwide', value: 'GLOBAL' },
+  { label: 'Poland', value: 'PL' },
+  { label: 'Germany', value: 'DE' },
+  { label: 'France', value: 'FR' },
+  { label: 'Netherlands', value: 'NL' },
+  { label: 'Spain', value: 'ES' },
+  { label: 'Czechia', value: 'CZ' },
+  { label: 'United Kingdom', value: 'GB' },
+  { label: 'United States', value: 'US' },
+]
+
+const REGION_LABELS: Record<string, string> = Object.fromEntries(
+  REGION_OPTIONS.map((o) => [o.value, o.label]),
+)
+
 const year = ref(2025)
-const scopeRegion = ref('PL')
+const scopeRegion = ref('GLOBAL')
 const currentTask = ref<ReportTask | null>(null)
 const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
@@ -111,13 +133,29 @@ onUnmounted(stopPolling)
         <h2>Silnik raportów</h2>
         <p class="card-sub">Zadanie trafia do kolejki Redis, worker generuje PDF i zapisuje go w MinIO (S3).</p>
 
-        <div class="field">
-          <label for="year">Rok</label>
-          <InputNumber id="year" v-model="year" :use-grouping="false" fluid />
-        </div>
-        <div class="field">
-          <label for="region">Region</label>
-          <InputText id="region" v-model="scopeRegion" fluid />
+        <div class="field-row">
+          <div class="field">
+            <label for="year">Rok</label>
+            <Select
+              id="year"
+              v-model="year"
+              :options="YEAR_OPTIONS"
+              option-label="label"
+              option-value="value"
+              fluid
+            />
+          </div>
+          <div class="field">
+            <label for="region">Region</label>
+            <Select
+              id="region"
+              v-model="scopeRegion"
+              :options="REGION_OPTIONS"
+              option-label="label"
+              option-value="value"
+              fluid
+            />
+          </div>
         </div>
 
         <Button
@@ -166,7 +204,7 @@ onUnmounted(stopPolling)
             <tr v-for="task in history" :key="task.id">
               <td class="mono">{{ task.id.slice(0, 8) }}</td>
               <td>{{ task.year }}</td>
-              <td>{{ task.scopeRegion }}</td>
+              <td>{{ REGION_LABELS[task.scopeRegion] ?? task.scopeRegion }}</td>
               <td><Tag :value="task.status" :severity="STATUS_SEVERITY[task.status]" /></td>
             </tr>
             <tr v-if="!historyLoading && history.length === 0">
@@ -224,6 +262,16 @@ onUnmounted(stopPolling)
   margin: 0 0 18px;
 }
 
+.field-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.field-row .field {
+  flex: 1;
+  margin-bottom: 0;
+}
+
 .field {
   margin-bottom: 14px;
   display: flex;
@@ -231,9 +279,11 @@ onUnmounted(stopPolling)
   gap: 6px;
 }
 .field label {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  color: #625f70;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #8b8898;
 }
 
 .error-message {

@@ -2,6 +2,7 @@ import { COUNTRY_NAMES } from './fx-rates';
 
 interface ReportData {
   year: number;
+  scopeLabel: string;
   currencySymbol: string;
   totalSales: number;
   orderCount: number;
@@ -50,6 +51,43 @@ export function buildReportHtml(data: ReportData): string {
     ([code]) => COUNTRY_NAMES[code] ?? code,
   );
   const regionValues = regionSorted.map(([, v]) => Math.round(v));
+  const multiRegion = regionSorted.length > 1;
+
+  // Donut panels for the middle row — only include ones with more than one
+  // slice, a single-slice pie (e.g. one region, one currency) says nothing.
+  const donutPanels = [
+    multiRegion && {
+      id: 'regionChart',
+      icon: '🌍',
+      title: 'Revenue by Region',
+      sub: `Share of revenue by country (in ${sym})`,
+      labels: regionLabels,
+      values: regionValues,
+      colors: 'PALETTE',
+    },
+    {
+      id: 'statusChart',
+      icon: '📊',
+      title: 'Order Status',
+      sub: 'Paid vs refunded vs failed',
+      labels: ['Paid', 'Refunded', 'Failed'],
+      values: [
+        data.statusBreakdown.paid,
+        data.statusBreakdown.refunded,
+        data.statusBreakdown.failed,
+      ],
+      colors: JSON.stringify(['#22c55e', '#f59e0b', '#ef4444']),
+    },
+    multiCurrency && {
+      id: 'currencyChart',
+      icon: '💱',
+      title: 'Sales by Currency',
+      sub: `Share by original currency (in ${sym})`,
+      labels: currencyLabels,
+      values: currencyValues,
+      colors: 'PALETTE',
+    },
+  ].filter((p): p is Exclude<typeof p, false> => p !== false);
 
   return `
 <!DOCTYPE html>
@@ -77,7 +115,7 @@ export function buildReportHtml(data: ReportData): string {
   /* KPI cards */
   .cards { display: flex; gap: 14px; margin-bottom: 16px; }
   .card {
-    flex: 1; background: #ffffff; border-radius: 14px; padding: 18px 20px;
+    flex: 1; min-width: 0; background: #ffffff; border-radius: 14px; padding: 18px 20px;
     border: 1px solid #ece9f5; box-shadow: 0 1px 3px rgba(30,27,46,0.06);
     position: relative; overflow: hidden;
   }
@@ -99,14 +137,14 @@ export function buildReportHtml(data: ReportData): string {
   .section { margin-top: 24px; page-break-inside: avoid; }
   .chart-row { display: flex; gap: 20px; margin-top: 20px; page-break-inside: avoid; }
   .panel {
-    flex: 1; border: 1px solid #ece9f5; border-radius: 14px; padding: 18px 20px;
+    flex: 1; min-width: 0; border: 1px solid #ece9f5; border-radius: 14px; padding: 18px 20px;
     box-shadow: 0 1px 3px rgba(30,27,46,0.06); background: #fff; page-break-inside: avoid;
   }
   .panel h3 { font-size: 14px; font-weight: 700; color: #1e1b2e; margin-bottom: 4px; }
   .panel .sub { font-size: 11px; color: #9b98a8; margin-bottom: 10px; }
   .canvas-wrap { position: relative; width: 100%; }
   .h-tall { height: 320px; }
-  .h-mid { height: 320px; }
+  .h-mid { height: 400px; }
   .h-xl { height: 460px; }
   .page-break { page-break-before: always; break-before: page; }
 
@@ -117,7 +155,7 @@ export function buildReportHtml(data: ReportData): string {
   <div class="header">
     <div class="eyebrow">SaaS Analytics Platform</div>
     <h1>Financial Report ${data.year}</h1>
-    <div class="meta">Scope: <strong>Worldwide 🌍</strong> &nbsp;•&nbsp; Reporting currency: <strong>${sym}</strong> &nbsp;•&nbsp; Generated ${new Date().toLocaleDateString()}</div>
+    <div class="meta">Scope: <strong>${data.scopeLabel}</strong> &nbsp;•&nbsp; Reporting currency: <strong>${sym}</strong> &nbsp;•&nbsp; Generated ${new Date().toLocaleDateString()}</div>
     <div class="rule"></div>
   </div>
 
@@ -153,7 +191,7 @@ export function buildReportHtml(data: ReportData): string {
 
   ${
     multiCurrency
-      ? `<p class="fx-note">💱 This is a worldwide report. All amounts are converted to ${sym} using indicative exchange rates, so totals across currencies and regions are comparable.</p>`
+      ? `<p class="fx-note">💱 All amounts are converted to ${sym} using indicative exchange rates, so totals across currencies and regions are comparable.</p>`
       : ''
   }
 
@@ -166,21 +204,15 @@ export function buildReportHtml(data: ReportData): string {
   </div>
 
   <div class="chart-row">
-    <div class="panel">
-      <h3>🌍 Revenue by Region</h3>
-      <div class="sub">Share of revenue by country (in ${sym})</div>
-      <div class="canvas-wrap h-mid"><canvas id="regionChart"></canvas></div>
-    </div>
-    <div class="panel">
-      <h3>📊 Order Status</h3>
-      <div class="sub">Paid vs refunded vs failed</div>
-      <div class="canvas-wrap h-mid"><canvas id="statusChart"></canvas></div>
-    </div>
-    <div class="panel">
-      <h3>💱 Sales by Currency</h3>
-      <div class="sub">Share by original currency (in ${sym})</div>
-      <div class="canvas-wrap h-mid"><canvas id="currencyChart"></canvas></div>
-    </div>
+    ${donutPanels
+      .map(
+        (p) => `<div class="panel">
+      <h3>${p.icon} ${p.title}</h3>
+      <div class="sub">${p.sub}</div>
+      <div class="canvas-wrap h-mid"><canvas id="${p.id}"></canvas></div>
+    </div>`,
+      )
+      .join('\n')}
   </div>
 
   <div class="chart-row page-break">
@@ -228,47 +260,34 @@ export function buildReportHtml(data: ReportData): string {
       }
     });
 
-    new Chart(document.getElementById('regionChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ${JSON.stringify(regionLabels)},
-        datasets: [{ data: ${JSON.stringify(regionValues)}, backgroundColor: PALETTE, borderWidth: 0 }]
-      },
-      options: {
-        maintainAspectRatio: false, cutout: '62%',
-        plugins: {
-          legend: { position: 'bottom' },
-          tooltip: { callbacks: { label: (c) => {
-            const total = c.dataset.data.reduce((a, b) => a + b, 0) || 1;
-            const pct = Math.round((c.parsed / total) * 100);
-            return c.label + ': ' + money(c.parsed) + ' (' + pct + '%)';
-          } } }
+    const DONUTS = ${JSON.stringify(
+      donutPanels.map((p) => ({
+        id: p.id,
+        labels: p.labels,
+        values: p.values,
+        colors:
+          p.id === 'statusChart' ? ['#22c55e', '#f59e0b', '#ef4444'] : null,
+      })),
+    )};
+    DONUTS.forEach((d) => {
+      new Chart(document.getElementById(d.id), {
+        type: 'doughnut',
+        data: {
+          labels: d.labels,
+          datasets: [{ data: d.values, backgroundColor: d.colors || PALETTE, borderWidth: 0 }]
+        },
+        options: {
+          maintainAspectRatio: false, cutout: '62%',
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: { callbacks: { label: (c) => {
+              const total = c.dataset.data.reduce((a, b) => a + b, 0) || 1;
+              const pct = Math.round((c.parsed / total) * 100);
+              return c.label + ': ' + money(c.parsed) + ' (' + pct + '%)';
+            } } }
+          }
         }
-      }
-    });
-
-    new Chart(document.getElementById('statusChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Paid', 'Refunded', 'Failed'],
-        datasets: [{
-          data: [${data.statusBreakdown.paid}, ${data.statusBreakdown.refunded}, ${data.statusBreakdown.failed}],
-          backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'], borderWidth: 0,
-        }]
-      },
-      options: { maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom' } } }
-    });
-
-    new Chart(document.getElementById('currencyChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ${JSON.stringify(currencyLabels)},
-        datasets: [{ data: ${JSON.stringify(currencyValues)}, backgroundColor: PALETTE, borderWidth: 0 }]
-      },
-      options: {
-        maintainAspectRatio: false, cutout: '62%',
-        plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (c) => c.label + ': ' + money(c.parsed) } } }
-      }
+      });
     });
 
     new Chart(document.getElementById('productsChart'), {

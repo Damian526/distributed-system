@@ -6,7 +6,13 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import puppeteer, { Browser } from 'puppeteer';
 import { buildReportHtml } from './report-template';
-import { CURRENCY_SYMBOLS, GLOBAL_CURRENCY, convertCurrency } from './fx-rates';
+import {
+  CURRENCY_SYMBOLS,
+  GLOBAL_CURRENCY,
+  REGION_CURRENCY,
+  COUNTRY_NAMES,
+  convertCurrency,
+} from './fx-rates';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, REPORTS_BUCKET } from '../storage/s3.client';
 import * as os from 'os';
@@ -33,7 +39,8 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
   }
 
   async process(job: Job<any, any, string>): Promise<void> {
-    const { taskId, year } = job.data;
+    const { taskId, year, scopeRegion } = job.data;
+    const isGlobal = !scopeRegion || scopeRegion === 'GLOBAL';
     this.logger.log(`Starting report generation for Task ID: ${taskId}`);
 
     try {
@@ -47,10 +54,11 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
       const start = new Date(`${year}-01-01T00:00:00Z`);
       const end = new Date(`${year + 1}-01-01T00:00:00Z`);
 
-      // global report: every order in the year, no country filter
+      // global report: every order in the year. Regional report: only that country's orders.
       const orders = await this.prisma.order.findMany({
         where: {
           createdAt: { gte: start, lte: end },
+          ...(isGlobal ? {} : { customer: { country: scopeRegion } }),
         },
         select: {
           amount: true,
@@ -77,9 +85,14 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
       });
       await job.updateProgress(50);
 
-      // one currency for the whole world so we're not adding PLN + EUR + USD like they're the same thing
-      const reportCurrency = GLOBAL_CURRENCY;
+      // one currency for the whole report so we're not adding PLN + EUR + USD like they're the same thing
+      const reportCurrency = isGlobal
+        ? GLOBAL_CURRENCY
+        : (REGION_CURRENCY[scopeRegion] ?? GLOBAL_CURRENCY);
       const currencySymbol = CURRENCY_SYMBOLS[reportCurrency] ?? reportCurrency;
+      const scopeLabel = isGlobal
+        ? 'Worldwide 🌍'
+        : (COUNTRY_NAMES[scopeRegion] ?? scopeRegion);
 
       const monthlySales = new Array(12).fill(0);
       const statusBreakdown = { paid: 0, refunded: 0, failed: 0 };
@@ -148,6 +161,7 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
 
       const html = buildReportHtml({
         year,
+        scopeLabel,
         currencySymbol,
         totalSales: Math.round(totalSales),
         orderCount: orders.length,
@@ -162,12 +176,17 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
         topProducts,
       });
 
-      const fileName = `report_${year}_GLOBAL_${Date.now()}.pdf`;
+      const fileName = `report_${year}_${isGlobal ? 'GLOBAL' : scopeRegion}_${Date.now()}.pdf`;
       const tmpPath = path.join(os.tmpdir(), fileName);
 
       const browser = await this.getBrowser();
       try {
         const page = await browser.newPage();
+        // Fixed, wide-enough viewport so print layout is deterministic —
+        // without this, wide content (e.g. an 8-country legend) can overflow
+        // the default 800px viewport and Chromium silently shrinks the whole
+        // PDF to fit, which throws off page count unpredictably per report.
+        await page.setViewport({ width: 900, height: 1000 });
         await page.setContent(html, { waitUntil: 'load' });
         await page.waitForFunction('window.chartsReady === true', {
           timeout: 10000,
