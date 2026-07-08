@@ -92,9 +92,9 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
           monthlySales[month] += amount;
           totalSales += amount;
           statusBreakdown.paid++;
-          // keep this one un-converted, it's just showing the real currency mix
+          // converted to base currency so the slices are actually comparable
           currencyBreakdown[o.currency] =
-            (currencyBreakdown[o.currency] || 0) + rawAmount;
+            (currencyBreakdown[o.currency] || 0) + amount;
           if (o.productName) {
             productRevenue[o.productName] =
               (productRevenue[o.productName] || 0) + amount;
