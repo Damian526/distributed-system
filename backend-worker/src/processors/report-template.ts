@@ -135,7 +135,10 @@ export function buildReportHtml(data: ReportData): string {
 
   /* Panels + charts */
   .section { margin-top: 24px; page-break-inside: avoid; }
-  .chart-row { display: flex; gap: 20px; margin-top: 20px; page-break-inside: avoid; }
+  /* Rows can split across pages if needed, but each individual panel inside
+     never gets cut mid-chart — it just moves whole to the next page. This
+     lets content flow and fill each page instead of leaving big gaps. */
+  .chart-row { display: flex; gap: 20px; margin-top: 20px; }
   .panel {
     flex: 1; min-width: 0; border: 1px solid #ece9f5; border-radius: 14px; padding: 18px 20px;
     box-shadow: 0 1px 3px rgba(30,27,46,0.06); background: #fff; page-break-inside: avoid;
@@ -146,7 +149,6 @@ export function buildReportHtml(data: ReportData): string {
   .h-tall { height: 320px; }
   .h-mid { height: 400px; }
   .h-xl { height: 460px; }
-  .page-break { page-break-before: always; break-before: page; }
 
   .footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #ece9f5; text-align: center; color: #b0adbe; font-size: 11px; }
 </style>
@@ -215,7 +217,7 @@ export function buildReportHtml(data: ReportData): string {
       .join('\n')}
   </div>
 
-  <div class="chart-row page-break">
+  <div class="chart-row">
     <div class="panel">
       <h3>📦 Top Products</h3>
       <div class="sub">Revenue by product (${sym})</div>

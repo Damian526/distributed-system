@@ -45,6 +45,7 @@ const pollingInterval = ref<number | null>(null)
 
 const history = ref<ReportTask[]>([])
 const historyLoading = ref(false)
+const downloadingIds = ref<Set<string>>(new Set())
 
 const STATUS_SEVERITY: Record<ReportTask['status'], string> = {
   PENDING: 'warn',
@@ -84,8 +85,32 @@ const generateReport = async () => {
   }
 }
 
-const downloadReport = (task: ReportTask) => {
-  window.open(`${API_URL}/api/reports/${task.id}/download`, '_blank')
+const isDownloading = (taskId: string) => downloadingIds.value.has(taskId)
+
+const downloadReport = async (task: ReportTask) => {
+  if (isDownloading(task.id)) return
+
+  downloadingIds.value = new Set(downloadingIds.value).add(task.id)
+  try {
+    const response = await axios.get(`${API_URL}/api/reports/${task.id}/download`, {
+      responseType: 'blob',
+    })
+    const blobUrl = URL.createObjectURL(response.data)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = `report_${task.year}_${task.scopeRegion}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch (error) {
+    console.error('Failed to download report', error)
+    errorMessage.value = 'Nie udało się pobrać raportu.'
+  } finally {
+    const next = new Set(downloadingIds.value)
+    next.delete(task.id)
+    downloadingIds.value = next
+  }
 }
 
 const startPolling = (taskId: string) => {
@@ -184,6 +209,7 @@ onUnmounted(stopPolling)
             severity="success"
             outlined
             fluid
+            :loading="isDownloading(currentTask.id)"
             @click="downloadReport(currentTask)"
           />
         </div>
@@ -198,6 +224,7 @@ onUnmounted(stopPolling)
               <th>Rok</th>
               <th>Region</th>
               <th>Status</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -206,9 +233,20 @@ onUnmounted(stopPolling)
               <td>{{ task.year }}</td>
               <td>{{ REGION_LABELS[task.scopeRegion] ?? task.scopeRegion }}</td>
               <td><Tag :value="task.status" :severity="STATUS_SEVERITY[task.status]" /></td>
+              <td class="action-cell">
+                <Button
+                  v-if="task.status === 'COMPLETED'"
+                  icon="pi pi-download"
+                  severity="secondary"
+                  text
+                  rounded
+                  :loading="isDownloading(task.id)"
+                  @click="downloadReport(task)"
+                />
+              </td>
             </tr>
             <tr v-if="!historyLoading && history.length === 0">
-              <td colspan="4" class="empty">Brak wygenerowanych raportów</td>
+              <td colspan="5" class="empty">Brak wygenerowanych raportów</td>
             </tr>
           </tbody>
         </table>
@@ -334,5 +372,9 @@ onUnmounted(stopPolling)
   text-align: center;
   color: #a7a4b4;
   padding: 24px 10px;
+}
+.history-table .action-cell {
+  width: 40px;
+  text-align: right;
 }
 </style>
