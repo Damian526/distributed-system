@@ -40,7 +40,11 @@ export const COUNTRY_NAMES: Record<string, string> = {
   US: 'United States',
 };
 
-export function convertCurrency(amount: number, from: string, to: string): number {
+export function convertCurrency(
+  amount: number,
+  from: string,
+  to: string,
+): number {
   if (from === to) return amount;
   const fromRate = RATES_TO_USD[from] ?? 1;
   const toRate = RATES_TO_USD[to] ?? 1;

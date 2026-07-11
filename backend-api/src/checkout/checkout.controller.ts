@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param } from '@nestjs/common';
 import { CheckoutService } from './checkout.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 
@@ -9,5 +9,10 @@ export class CheckoutController {
   @Post()
   async createSession(@Body() dto: CreateCheckoutDto) {
     return this.checkoutService.createSession(dto);
+  }
+
+  @Get('session/:sessionId')
+  async getSessionStatus(@Param('sessionId') sessionId: string) {
+    return this.checkoutService.getSessionStatus(sessionId);
   }
 }

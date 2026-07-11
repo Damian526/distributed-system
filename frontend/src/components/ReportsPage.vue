@@ -11,6 +11,7 @@ interface ReportTask {
   status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
   progress: number
   fileKey: string | null
+  errorMessage: string | null
   createdAt: string
 }
 
@@ -21,15 +22,15 @@ const YEAR_OPTIONS = [
 ]
 
 const REGION_OPTIONS = [
-  { label: '🌍 Worldwide', value: 'GLOBAL' },
-  { label: 'Poland', value: 'PL' },
-  { label: 'Germany', value: 'DE' },
-  { label: 'France', value: 'FR' },
-  { label: 'Netherlands', value: 'NL' },
-  { label: 'Spain', value: 'ES' },
-  { label: 'Czechia', value: 'CZ' },
-  { label: 'United Kingdom', value: 'GB' },
-  { label: 'United States', value: 'US' },
+  { label: '🌍 Cały świat', value: 'GLOBAL' },
+  { label: '🇵🇱 Polska', value: 'PL' },
+  { label: '🇩🇪 Niemcy', value: 'DE' },
+  { label: '🇫🇷 Francja', value: 'FR' },
+  { label: '🇳🇱 Holandia', value: 'NL' },
+  { label: '🇪🇸 Hiszpania', value: 'ES' },
+  { label: '🇨🇿 Czechy', value: 'CZ' },
+  { label: '🇬🇧 Wielka Brytania', value: 'GB' },
+  { label: '🇺🇸 Stany Zjednoczone', value: 'US' },
 ]
 
 const REGION_LABELS: Record<string, string> = Object.fromEntries(
@@ -52,6 +53,37 @@ const STATUS_SEVERITY: Record<ReportTask['status'], string> = {
   PROCESSING: 'info',
   COMPLETED: 'success',
   FAILED: 'danger',
+}
+
+const STATUS_LABELS: Record<ReportTask['status'], string> = {
+  PENDING: 'W kolejce',
+  PROCESSING: 'Generowanie...',
+  COMPLETED: 'Gotowe',
+  FAILED: 'Nie udało się',
+}
+
+// Mirrors the real checkpoints the worker reports (report.processor.ts):
+// 0 queued in Redis · 10 fetching orders from Postgres · 50 rendering + uploading the PDF (no separate S3 checkpoint)
+const PIPELINE_STEPS = [
+  { key: 'queued', icon: 'pi pi-sort-numeric-up', label: 'W kolejce', threshold: 0 },
+  { key: 'fetch', icon: 'pi pi-database', label: 'Pobieranie danych sprzedaży', threshold: 10 },
+  { key: 'render', icon: 'pi pi-file-pdf', label: 'Tworzenie pliku PDF', threshold: 50 },
+] as const
+
+type StepState = 'done' | 'active' | 'error' | 'pending'
+
+const stepState = (threshold: number): StepState => {
+  const task = currentTask.value
+  if (!task) return 'pending'
+  if (task.status === 'COMPLETED') return 'done'
+  if (task.status === 'FAILED') {
+    if (task.progress > threshold) return 'done'
+    if (task.progress === threshold) return 'error'
+    return 'pending'
+  }
+  if (task.progress > threshold) return 'done'
+  if (task.progress === threshold) return 'active'
+  return 'pending'
 }
 
 const loadHistory = async () => {
@@ -140,7 +172,20 @@ const stopPolling = () => {
   }
 }
 
-onMounted(loadHistory)
+onMounted(async () => {
+  await loadHistory()
+  // Switching app tabs unmounts this component, which kills the in-memory
+  // polling/currentTask — but the job itself keeps running server-side.
+  // Re-attach to it instead of leaving the UI looking like nothing is happening.
+  const unfinished = history.value.find(
+    (t) => t.status === 'PENDING' || t.status === 'PROCESSING',
+  )
+  if (unfinished) {
+    currentTask.value = unfinished
+    isLoading.value = true
+    startPolling(unfinished.id)
+  }
+})
 onUnmounted(stopPolling)
 </script>
 
@@ -199,9 +244,32 @@ onUnmounted(stopPolling)
         <div v-if="currentTask" class="current-task">
           <div class="current-task-row">
             <span>Status</span>
-            <Tag :value="currentTask.status" :severity="STATUS_SEVERITY[currentTask.status]" />
+            <Tag :value="STATUS_LABELS[currentTask.status]" :severity="STATUS_SEVERITY[currentTask.status]" />
           </div>
-          <ProgressBar :value="currentTask.progress" style="height: 18px" />
+          <ProgressBar :value="currentTask.progress" style="height: 10px" :show-value="false" />
+
+          <ol class="pipeline">
+            <li
+              v-for="(step, index) in PIPELINE_STEPS"
+              :key="step.key"
+              class="pipeline-step"
+              :class="stepState(step.threshold)"
+            >
+              <span class="pipeline-icon">
+                <i v-if="stepState(step.threshold) === 'done'" class="pi pi-check" />
+                <i v-else-if="stepState(step.threshold) === 'active'" class="pi pi-spin pi-spinner" />
+                <i v-else-if="stepState(step.threshold) === 'error'" class="pi pi-times" />
+                <i v-else :class="step.icon" />
+              </span>
+              <span class="pipeline-label">{{ step.label }}</span>
+              <span v-if="index < PIPELINE_STEPS.length - 1" class="pipeline-connector" />
+            </li>
+          </ol>
+
+          <Message v-if="currentTask.status === 'FAILED'" severity="error" class="error-message">
+            {{ currentTask.errorMessage || 'Generowanie raportu nie powiodło się.' }}
+          </Message>
+
           <Button
             v-if="currentTask.status === 'COMPLETED'"
             label="Pobierz PDF"
@@ -232,7 +300,7 @@ onUnmounted(stopPolling)
               <td class="mono">{{ task.id.slice(0, 8) }}</td>
               <td>{{ task.year }}</td>
               <td>{{ REGION_LABELS[task.scopeRegion] ?? task.scopeRegion }}</td>
-              <td><Tag :value="task.status" :severity="STATUS_SEVERITY[task.status]" /></td>
+              <td><Tag :value="STATUS_LABELS[task.status]" :severity="STATUS_SEVERITY[task.status]" /></td>
               <td class="action-cell">
                 <Button
                   v-if="task.status === 'COMPLETED'"
@@ -342,6 +410,81 @@ onUnmounted(stopPolling)
   align-items: center;
   font-size: 13px;
   color: #625f70;
+}
+
+.pipeline {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  align-items: flex-start;
+}
+.pipeline-step {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+.pipeline-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  background: #f2f0fa;
+  color: #b3aec4;
+  border: 2px solid #ece9f5;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  z-index: 1;
+}
+.pipeline-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a7a4b4;
+  line-height: 1.3;
+  padding: 0 4px;
+}
+.pipeline-connector {
+  position: absolute;
+  top: 15px;
+  left: calc(50% + 22px);
+  right: calc(-50% + 22px);
+  height: 2px;
+  background: #ece9f5;
+  z-index: 0;
+}
+
+.pipeline-step.done .pipeline-icon {
+  background: #6d5bf9;
+  border-color: #6d5bf9;
+  color: #fff;
+}
+.pipeline-step.done .pipeline-label {
+  color: #4b4859;
+}
+.pipeline-step.done .pipeline-connector {
+  background: #6d5bf9;
+}
+.pipeline-step.active .pipeline-icon {
+  background: #eef0ff;
+  border-color: #6d5bf9;
+  color: #6d5bf9;
+}
+.pipeline-step.active .pipeline-label {
+  color: #6d5bf9;
+}
+.pipeline-step.error .pipeline-icon {
+  background: #fdecec;
+  border-color: #e0433d;
+  color: #e0433d;
+}
+.pipeline-step.error .pipeline-label {
+  color: #e0433d;
 }
 
 .history-table {

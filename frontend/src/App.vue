@@ -5,7 +5,9 @@ import CheckoutPage from './components/CheckoutPage.vue'
 
 type TabKey = 'reports' | 'checkout'
 
-const activeTab = ref<TabKey>('reports')
+// Stripe redirects back to /checkout/success or /checkout/cancel — land on the Checkout tab, not the default one
+const returningFromStripe = window.location.pathname.startsWith('/checkout/')
+const activeTab = ref<TabKey>(returningFromStripe ? 'checkout' : 'reports')
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'reports', label: 'Raporty', icon: 'pi pi-chart-bar' },

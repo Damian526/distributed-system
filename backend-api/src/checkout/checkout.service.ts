@@ -2,6 +2,14 @@ import { Injectable } from '@nestjs/common';
 import Stripe from 'stripe';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 
+export interface CheckoutSessionStatus {
+  status: 'paid' | 'unpaid' | 'no_payment_required';
+  amount: number;
+  currency: string;
+  productName: string;
+  customerEmail: string | null;
+}
+
 @Injectable()
 export class CheckoutService {
   private readonly stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -27,5 +35,19 @@ export class CheckoutService {
     });
 
     return { url: session.url }; // frontend just redirects the browser here
+  }
+
+  async getSessionStatus(sessionId: string): Promise<CheckoutSessionStatus> {
+    const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['line_items'],
+    });
+
+    return {
+      status: session.payment_status, // 'paid' | 'unpaid' | 'no_payment_required'
+      amount: (session.amount_total ?? 0) / 100,
+      currency: (session.currency ?? 'usd').toUpperCase(),
+      productName: session.line_items?.data[0]?.description || 'Unknown Product',
+      customerEmail: session.customer_details?.email ?? null,
+    };
   }
 }

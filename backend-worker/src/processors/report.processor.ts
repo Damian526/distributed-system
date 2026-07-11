@@ -16,7 +16,7 @@ import {
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, REPORTS_BUCKET } from '../storage/s3.client';
 import * as os from 'os';
-@Processor('report-queue')
+@Processor('report-queue', { concurrency: 3 })
 export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
   private readonly logger = new Logger(ReportProcessor.name);
   private browser: Browser | null = null;
@@ -26,7 +26,8 @@ export class ReportProcessor extends WorkerHost implements OnModuleDestroy {
   }
 
   private async getBrowser(): Promise<Browser> {
-    if (!this.browser) {
+    // condition to relaunch the browser if it was closed or crashed
+    if (!this.browser || !this.browser.connected) {
       this.browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],

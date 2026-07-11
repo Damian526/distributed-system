@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL
+const MAX_AMOUNT = 100000
+const MAX_PRODUCT_NAME_LENGTH = 120
 
 interface CheckoutSession {
   url: string
+}
+
+interface CheckoutSessionStatus {
+  status: 'paid' | 'unpaid' | 'no_payment_required'
+  amount: number
+  currency: string
+  productName: string
+  customerEmail: string | null
 }
 
 interface OrderRow {
@@ -23,21 +33,59 @@ const amount = ref(49.99)
 const currency = ref('usd')
 const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
+const formTouched = ref(false)
 
 const orders = ref<OrderRow[]>([])
 const ordersLoading = ref(false)
+
+const paymentResult = ref<{ status: 'success' | 'cancelled'; details?: CheckoutSessionStatus } | null>(null)
 
 const currencyOptions = [
   { label: 'USD', value: 'usd' },
   { label: 'EUR', value: 'eur' },
   { label: 'PLN', value: 'pln' },
 ]
+const ALLOWED_CURRENCIES = currencyOptions.map((c) => c.value)
 
 const STATUS_SEVERITY: Record<OrderRow['status'], string> = {
   PAID: 'success',
   REFUNDED: 'warn',
   FAILED: 'danger',
 }
+
+// Timestamps are stored in UTC (correct) — always display them in Warsaw local time
+const dateFormatter = new Intl.DateTimeFormat('pl-PL', {
+  timeZone: 'Europe/Warsaw',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+const formatOrderDate = (isoDate: string) => dateFormatter.format(new Date(isoDate))
+
+const productNameError = computed(() => {
+  const value = productName.value.trim()
+  if (!value) return 'Nazwa produktu jest wymagana'
+  if (value.length > MAX_PRODUCT_NAME_LENGTH) return `Maksymalnie ${MAX_PRODUCT_NAME_LENGTH} znaków`
+  return null
+})
+
+const amountError = computed(() => {
+  if (amount.value == null || Number.isNaN(amount.value)) return 'Podaj kwotę'
+  if (amount.value <= 0) return 'Kwota musi być większa od 0'
+  if (amount.value > MAX_AMOUNT) return `Maksymalna kwota to ${MAX_AMOUNT}`
+  return null
+})
+
+const currencyError = computed(() => {
+  if (!ALLOWED_CURRENCIES.includes(currency.value)) return 'Wybierz obsługiwaną walutę'
+  return null
+})
+
+const isFormValid = computed(
+  () => !productNameError.value && !amountError.value && !currencyError.value,
+)
 
 const loadOrders = async () => {
   ordersLoading.value = true
@@ -51,13 +99,26 @@ const loadOrders = async () => {
   }
 }
 
+// The webhook that turns a Stripe session into an Order row runs async (queue),
+// so poll a few times after returning from a successful payment instead of a single fetch.
+const waitForOrder = async (sessionId: string) => {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await loadOrders()
+    if (orders.value.some((order) => order.transactionId === sessionId)) return
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+  }
+}
+
 const startCheckout = async () => {
+  formTouched.value = true
+  if (!isFormValid.value) return
+
   errorMessage.value = null
   isLoading.value = true
 
   try {
     const response = await axios.post<CheckoutSession>(`${API_URL}/api/checkout`, {
-      productName: productName.value,
+      productName: productName.value.trim(),
       amount: amount.value,
       currency: currency.value,
     })
@@ -69,7 +130,36 @@ const startCheckout = async () => {
   }
 }
 
-onMounted(loadOrders)
+const handleStripeReturn = async () => {
+  const path = window.location.pathname
+  const sessionId = new URLSearchParams(window.location.search).get('session_id')
+
+  if (path.startsWith('/checkout/success') && sessionId) {
+    try {
+      const response = await axios.get<CheckoutSessionStatus>(
+        `${API_URL}/api/checkout/session/${sessionId}`,
+      )
+      paymentResult.value = { status: 'success', details: response.data }
+      await waitForOrder(sessionId)
+    } catch (error) {
+      console.error('Failed to confirm checkout session', error)
+      paymentResult.value = { status: 'success' }
+    }
+  } else if (path.startsWith('/checkout/cancel')) {
+    paymentResult.value = { status: 'cancelled' }
+  }
+
+  if (path.startsWith('/checkout/')) {
+    window.history.replaceState(null, '', '/')
+  }
+}
+
+onMounted(async () => {
+  await handleStripeReturn()
+  if (!ordersLoading.value && orders.value.length === 0) {
+    await loadOrders()
+  }
+})
 </script>
 
 <template>
@@ -81,6 +171,17 @@ onMounted(loadOrders)
       </div>
     </header>
 
+    <Message v-if="paymentResult?.status === 'success'" severity="success" class="payment-result-message">
+      <strong>Płatność zakończona sukcesem.</strong>
+      <span v-if="paymentResult.details">
+        Opłacono {{ paymentResult.details.amount.toFixed(2) }} {{ paymentResult.details.currency }} za „{{ paymentResult.details.productName }}”.
+      </span>
+      Transakcja pojawi się poniżej na liście ostatnich transakcji.
+    </Message>
+    <Message v-else-if="paymentResult?.status === 'cancelled'" severity="warn" class="payment-result-message">
+      Płatność została anulowana. Nie pobrano żadnych środków.
+    </Message>
+
     <div class="grid">
       <section class="card">
         <h2>Nowa płatność</h2>
@@ -88,7 +189,14 @@ onMounted(loadOrders)
 
         <div class="field">
           <label for="productName">Nazwa produktu</label>
-          <InputText id="productName" v-model="productName" fluid />
+          <InputText
+            id="productName"
+            v-model="productName"
+            :invalid="formTouched && !!productNameError"
+            :maxlength="MAX_PRODUCT_NAME_LENGTH"
+            fluid
+          />
+          <small v-if="formTouched && productNameError" class="field-error">{{ productNameError }}</small>
         </div>
         <div class="field">
           <label for="amount">Kwota</label>
@@ -98,8 +206,12 @@ onMounted(loadOrders)
             mode="decimal"
             :min-fraction-digits="2"
             :max-fraction-digits="2"
+            :min="0"
+            :max="MAX_AMOUNT"
+            :invalid="formTouched && !!amountError"
             fluid
           />
+          <small v-if="formTouched && amountError" class="field-error">{{ amountError }}</small>
         </div>
         <div class="field">
           <label for="currency">Waluta</label>
@@ -109,8 +221,10 @@ onMounted(loadOrders)
             :options="currencyOptions"
             option-label="label"
             option-value="value"
+            :invalid="formTouched && !!currencyError"
             fluid
           />
+          <small v-if="formTouched && currencyError" class="field-error">{{ currencyError }}</small>
         </div>
 
         <Message v-if="errorMessage" severity="error" class="error-message">
@@ -121,7 +235,7 @@ onMounted(loadOrders)
           label="Przejdź do płatności"
           icon="pi pi-credit-card"
           :loading="isLoading"
-          :disabled="isLoading"
+          :disabled="isLoading || (formTouched && !isFormValid)"
           fluid
           @click="startCheckout"
         />
@@ -151,6 +265,7 @@ onMounted(loadOrders)
             <th>Produkt</th>
             <th>Kwota</th>
             <th>Waluta</th>
+            <th>Data</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -160,10 +275,11 @@ onMounted(loadOrders)
             <td>{{ order.productName }}</td>
             <td>{{ Number(order.amount).toFixed(2) }}</td>
             <td>{{ order.currency }}</td>
+            <td class="mono">{{ formatOrderDate(order.createdAt) }}</td>
             <td><Tag :value="order.status" :severity="STATUS_SEVERITY[order.status]" /></td>
           </tr>
           <tr v-if="!ordersLoading && orders.length === 0">
-            <td colspan="5" class="empty">Brak transakcji</td>
+            <td colspan="6" class="empty">Brak transakcji</td>
           </tr>
         </tbody>
       </table>
@@ -235,6 +351,15 @@ onMounted(loadOrders)
 
 .error-message {
   margin-bottom: 14px;
+}
+
+.payment-result-message {
+  margin-bottom: 20px;
+}
+
+.field-error {
+  color: #e0433d;
+  font-size: 12px;
 }
 
 .summary-card {

@@ -43,6 +43,7 @@ model Customer {
   createdAt DateTime @default(now())
   orders    Order[]
 
+  @@index([country])
   @@map("customers")
 }
 
@@ -56,5 +57,8 @@ model Order {
   productName   String       @map("product_name")
   createdAt     DateTime      @default(now())
   customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([customerId])
   @@map("orders")
 }
